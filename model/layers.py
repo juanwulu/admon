@@ -33,7 +33,6 @@ class GraphConvolutionLayer(nn.Module):
     assert isinstance(out_dim, int),\
       TypeError(f'Expect int dimension, but got {type(out_dim):s}.')
 
-    # TODO: create parameters for GCN(X, A) = SiLU(AXW+XWs)
     self.in_dim = in_dim
     self.out_dim = out_dim
     self.conv_w = nn.Parameter(T.FloatTensor(in_dim, out_dim))
@@ -51,7 +50,7 @@ class GraphConvolutionLayer(nn.Module):
     """Forward function for naive graph convolution.
 
     Args:
-      x: Input node embeddings of shape :math:`[N, s]`.
+      x: Input node embeddings of shape :math:`[N, d]`.
       a: Edge adjacency matrix of shape :math:`[N, N]`.
     """
 
@@ -89,7 +88,7 @@ class SkipGraphConvolutionLayer(GraphConvolutionLayer):
     """Forward function with skipped connection.
 
     Args:
-      x: Input node embeddings of shape :math:`[N, s]`.
+      x: Input node embeddings of shape :math:`[N, d]`.
       a: Edge adjacency matrix of shape :math:`[N, N]`.
     """
 
