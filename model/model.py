@@ -60,7 +60,7 @@ class Single(nn.Module):
     """
 
     x = x.float()
-    out = self.layers(x)
+    out = self.layers(x, a)
     out = F.softmax(out)  # soft clustering
 
     return out
