@@ -1,8 +1,6 @@
 # Deep Modular Graph Neural Network
 
-from .model import Single, Hierachy
-from .layers import GraphConvolutionLayer, SkipGraphConvolutionLayer
+from .model import Single, Hierachy, DMoN
+from .layers import GCN
 
-__all__ = ['Single', 'Hierachy',
-           'GraphConvolutionLayer',
-           'SkipGraphConvolutionLayer']
+__all__ = ['Single', 'Hierachy', 'DMoN', 'GCN']

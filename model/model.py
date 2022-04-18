@@ -10,7 +10,7 @@ import torch as T
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .layers import GraphConvolutionLayer, SkipGraphConvolutionLayer
+from .layers import GCN
 
 class Single(nn.Module):
   """
@@ -45,10 +45,7 @@ class Single(nn.Module):
     layers = OrderedDict()
     emb_dim = in_dim
     for i in range(depths):
-      if skipconn:
-        layers[f'gcn_{i:d}'] = SkipGraphConvolutionLayer(emb_dim, hidden)
-      else:
-        layers[f'gcn_{i:d}'] = GraphConvolutionLayer(emb_dim, hidden)
+      layers[f'gcn_{i:d}'] = GCN(emb_dim, hidden, skip=skipconn)
       emb_dim = hidden
       hidden = hidden * inflation
     layers['predict'] = nn.Linear(emb_dim, n_clusters)
