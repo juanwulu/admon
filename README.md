@@ -1,6 +1,4 @@
-# Understand Operation Delay Patterns with Graph-based Model
-
-[![BSD 3-Clause License][license-shield]]][license-url]
+# Understand Operation Delay Patterns with Deep Modularity Network
 
 ## About the Project
 
@@ -20,6 +18,20 @@
   - [] Clustering
   - [] Model Tuning
 - [] Analysis
+
+## Contact
+
+Juanwu Lu (juanwu_lu@berkeley.edu)
+
+## References
+
+```bibtex
+@inproceedings{tsitsulin2020clustering,
+     author={Tsitsulin, Anton and Palowitch, John and Perozzi, Bryan and M\"uller, Emmanuel}
+     title={Graph Clustering with Graph Neural Networks},
+     year = {2020},
+    }
+```
 
 ## License
 
