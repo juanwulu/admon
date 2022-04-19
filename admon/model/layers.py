@@ -4,6 +4,7 @@
 
 from __future__ import print_function
 import math
+from typing import Tuple
 
 import torch as T
 import torch.nn as nn
@@ -59,14 +60,14 @@ class GCN(nn.Module):
     else:
       self.register_parameter('bias', None)
 
-    self.reset_parameters()  # Initialization
+    self.init_parameters()  # Initialization
 
   def __repr__(self):
     """Name of the layer."""
     return self.__class__.__name__ +\
             f'({self.in_dim:d}->{self.out_dim:d})'
 
-  def reset_parameters(self):
+  def init_parameters(self):
     """Initialize model parameters."""
     stdv = 1. / math.sqrt(self.in_dim)
     self.conv_w.data.uniform_(-stdv, stdv)
@@ -75,23 +76,31 @@ class GCN(nn.Module):
     if self.bias is not None:
       self.bias.data.uniform_(-stdv, stdv)
 
-  def forward(self, x: T.Tensor, a: T.Tensor) -> T.Tensor:
+  def forward(self, inputs: Tuple[T.Tensor]) -> T.Tensor:
     """Forward function for naive graph convolution.
 
     Args:
-      x: Input node embeddings of shape :math:`[N, d]`.
-      a: Edge adjacency matrix of shape :math:`[N, N]`.
+      inputs: A tuple of PyTorch tensors. The frist tensor is a `[N, d]`
+      node embedding matrix of `N` nodes with `d` as size of features;
+      The second tensor is a `[N, N]` square adjacency matrix.
+
+    Returns:
+      A tuple of PyTorch tensors. The first tensor is a `[N, d]` node
+      embedding updated by graph convolution and the other original
+      square matrix.
     """
 
-    x = x.float()
-    # Node transformation
-    hidden = T.matmul(T.matmul(a, x), self.conv_w)  # convolution
-    
+    nodes, adjancency = inputs
+    nodes = nodes.float()
+    adjancency = adjancency.float()
+    # Graph convolution calculation
+    hidden = T.matmul(T.matmul(adjancency, nodes), self.conv_w)
+
     # Skip connection
     if self.skip_w is not None:
-      skip = T.matmul(x, self.skip_w)
+      skip = T.matmul(nodes, self.skip_w)
       hidden = hidden + skip
-    
+
     # Additive bias
     if self.bias is not None:
       hidden = hidden + self.bias
@@ -104,4 +113,4 @@ class GCN(nn.Module):
     else:
       output = F.silu(hidden)
 
-    return output
+    return output, adjancency

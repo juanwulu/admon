@@ -2,7 +2,6 @@
 # -*- encoding: utf-8 -*-
 """Deep Graph Neural Network for Clustering"""
 
-from __future__ import print_function
 from collections import OrderedDict
 from typing import Tuple
 
@@ -10,7 +9,8 @@ import torch as T
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .layers import GCN
+from admon.model import GCN
+from admon.utils import normalize_graph
 
 class Single(nn.Module):
   """
@@ -22,7 +22,7 @@ class Single(nn.Module):
     in_dim: Dimension of input node embeddings.
   """
 
-  __slots__ = ['in_dim', 'layers']
+  __slots__ = ['in_dim', 'encoder', 'predict', 'dropout']
   def __init__(self, in_dim: int, n_clusters: int,
                hidden: int=1024, depths: int=1, dropout:float=0.,
                inflation: int=1, skipconn: bool=True) -> None:
@@ -48,9 +48,18 @@ class Single(nn.Module):
       layers[f'gcn_{i:d}'] = GCN(emb_dim, hidden, skip=skipconn)
       emb_dim = hidden
       hidden = hidden * inflation
-    layers['predict'] = nn.Linear(emb_dim, n_clusters)
-    layers['dropout'] = nn.Dropout(p=dropout)
-    self.layers = nn.Sequential(layers)
+    self.encoder = nn.Sequential(layers)
+    self.predict = nn.Linear(emb_dim, n_clusters, bias=True)
+    self.dropout = nn.Dropout(p=dropout)
+
+    self.init_parameters()
+
+  def init_parameters(self):
+    """Initialize model parameters."""
+
+    with T.no_grad():
+      self.predict.weight.copy_(nn.init.orthogonal(self.predict.weight.data))
+      self.predict.bias.copy_(nn.init.zeros_(self.predict.bias.data))
 
   def forward(self, inputs: Tuple[T.Tensor]) -> T.Tensor:
     """Forward function for single level.
@@ -65,11 +74,12 @@ class Single(nn.Module):
       a node in a given cluster.
     """
 
-    features, adjancency = inputs
-    features = features.float()
-    out = self.layers(features, adjancency)
+    assert len(inputs) == 2,\
+      ValueError(f'Expect input to have 2 elements, but got {len(inputs)}.')
+    features, _ = self.encoder(inputs)
+    prediction = self.dropout(self.predict(features))
 
-    return out
+    return prediction
 
 class Hierachy(nn.Module):
   """
@@ -129,28 +139,30 @@ class DMoN(nn.Module):
     """Perform DMoN clustering according to node features and graph.
 
     Args:
-      inputs: A tuple of PyTorch tensors. The frist tensor is a `[N, d]`
+      inputs: A tuple of PyTorch tensors. The frist tensor is a `[B, N, d]`
       node embedding matrix of `N` nodes with `d` as size of features;
-      The second tensor is a `[N, N]` square adjacency matrix.
+      The second tensor is a `[B, N, N]` square adjacency matrix.
 
     Returns:
-      A tuple of PyTorch tensors. The first tensor is a `[k, d]` cluster
+      A tuple of PyTorch tensors. The first tensor is a `[B, k, d]` cluster
       representations with `k` as the number of clusters. The second tensor
-      is a `[N, k]` cluster assignment matrix. If do_unpooling is True, return
-      `[N, d]` node representations instead of cluster representation.
+      is a `[B, N, k]` cluster assignment matrix. If do_unpooling is True,
+      return `[B, N, d]` node representations instead of cluster representation.
     """
 
     nodes, adjacency = inputs
 
     assert isinstance(nodes, T.Tensor) and isinstance(adjacency, T.Tensor),\
       TypeError(f'Expect Tensors, but got {type(nodes)} and {type(adjacency)}.')
-    assert adjacency.shape[0] == nodes.shape[0],\
+    assert adjacency.shape[1] == nodes.shape[1],\
       ValueError('Node number in adjacency matrix does not match features.')
-    assert adjacency.shape[0] == adjacency.shape[1],\
+    assert adjacency.shape[1] == adjacency.shape[2],\
       ValueError(f'Expect square adjacency matrix, but got {adjacency.shape}.')
 
-    assignments = F.softmax(self.encoder(inputs), dim=1)  # soft cluster probs
-    cluster_sizes = T.sum(assignments, dim=0)  # number of nodes in clusters
+    # Compute soft cluster assignments with normalized adjacency matrix
+    norm_adjacency = normalize_graph(adjacency, add_self_loops=False)
+    assignments = F.softmax(self.encoder([nodes, norm_adjacency]), dim=-1)
+    cluster_sizes = T.sum(assignments, dim=1)  # number of nodes in each cluster
     assignments_pooling = assignments / cluster_sizes  # shape: [B, N, k]
 
     degrees = T.sum(adjacency, dim=-1).unsqueeze(-1)  # shape: [B, N, 1]
@@ -166,11 +178,13 @@ class DMoN(nn.Module):
     normalizer = T.matmul(dyad_left, dyad_right)/2/num_edges
 
     # Calculate deep modularity loss
-    modularity_loss = -T.trace(pooled_graph-normalizer)/2/num_edges
+    modularity_loss = -T.diagonal(pooled_graph-normalizer, dim1=-2, dim2=-1)\
+                        .sum()/2/num_edges
     collapse_loss = T.norm(cluster_sizes)/nodes.shape[0]\
-                    * T.sqrt(T.FloatTensor(self.n_clusters)) - 1
-    collapse_loss = self.collapse_regularization * collapse_loss
-    self.loss = modularity_loss + collapse_loss
+                    * T.sqrt(T.FloatTensor([self.n_clusters])) - 1
+    collapse_loss: T.Tensor = self.collapse_regularization * collapse_loss
+    # Batch average aggregation
+    self.loss = modularity_loss.mean(dim=0) + collapse_loss.mean(dim=0)
 
     # Calcualte pooled features
     pooled_features = T.matmul(assignments_pooling.permute(0, 2, 1), nodes)
