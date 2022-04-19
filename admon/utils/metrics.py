@@ -12,7 +12,7 @@ def conductance(adj: np.matrix, clusters: np.ndarray) -> float:
   42(1), 181-213.
 
   Args:
-    adj: The adjacency matrix of shape `[N, N]` a graph with `N` nodes. 
+    adj: The adjacency matrix of shape `[N, N]` a graph with `N` nodes.
     clusters: A `ndarray` of shape `[N, ]` with cluster labels for each node.
   """
 
@@ -37,7 +37,7 @@ def modularity(adj: np.matrix, clusters: np.ndarray) -> float:
   associated with each cluster. :math:`Q=Σ(A-ddT/2m)/2m`.
 
   Args:
-    adj: The adjacency matrix of shape `[N, N]` a graph with `N` nodes. 
+    adj: The sparse adjacency matrix of shape `[N, N]` a graph with `N` nodes.
     clusters: A `ndarray` of shape `[N, ]` with cluster labels for each node.
 
   Returns:
@@ -47,7 +47,7 @@ def modularity(adj: np.matrix, clusters: np.ndarray) -> float:
   assert adj.shape[0] == adj.shape[1], ValueError('Nonsquare adjacency matrix!')
 
   # Calculate degrees as sum over rows
-  degrees: np.ndarray = adj.sum(axis=0).A1  # shape: [N, ]
+  degrees: np.ndarray = adj.sum(axis=1).A1  # shape: [N, ]
   n = degrees.sum()  # total number of half edges n=2m
   result = 0
   for idx in np.unique(clusters):

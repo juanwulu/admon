@@ -1,6 +1,6 @@
 """Deep Modular Graph Neural Network"""
 
-from .layers import GCN
-from .model import Single, Hierachy, DMoN
+from .layers import DMoN, GCNLayer
+from .model import Single, Hierachy
 
-__all__ = ['Single', 'Hierachy', 'DMoN', 'GCN']
+__all__ = ['Single', 'Hierachy', 'DMoN', 'GCNLayer']
