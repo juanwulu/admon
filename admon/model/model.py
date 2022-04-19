@@ -25,7 +25,8 @@ class Single(nn.Module):
   __slots__ = ['in_dim', 'encoder', 'predict', 'dropout']
   def __init__(self, in_dim: int, n_clusters: int,
                hidden: int=1024, depths: int=1, dropout:float=0.,
-               inflation: int=1, skipconn: bool=True) -> None:
+               inflation: int=1, activation: str='silu',
+               skipconn: bool=True) -> None:
     """Initialize GNN clustering model.
 
     Args:
@@ -35,6 +36,7 @@ class Single(nn.Module):
       depths: Number of hidden layers.
       dropout: A float probability of dropout layer.
       inflation: Inflation factor between layers.
+      activation: Name of activation function to use.
       skipconn: If use skip connected graph layers.
     """
 
@@ -45,7 +47,9 @@ class Single(nn.Module):
     layers = OrderedDict()
     emb_dim = in_dim
     for i in range(depths):
-      layers[f'gcn_{i:d}'] = GCN(emb_dim, hidden, skip=skipconn)
+      layers[f'gcn_{i:d}'] = GCN(emb_dim, hidden,
+                                 skip=skipconn,
+                                 activation=activation)
       emb_dim = hidden
       hidden = hidden * inflation
     self.encoder = nn.Sequential(layers)
@@ -105,7 +109,7 @@ class DMoN(nn.Module):
   def __init__(self, in_dim: int, n_clusters: int,
                hidden: int=1024, depths: int=1, dropout: float=0.,
                inflation: int=1, skipconn: bool=False,
-               hierarchy: bool=False,
+               activation: str='selu', hierarchy: bool=False,
                collapse_regularization: float=0.1,
                do_unpooling: float=False) -> None:
     """Initialize the Deep Modularity Network.
@@ -127,13 +131,14 @@ class DMoN(nn.Module):
     self.n_clusters = n_clusters
     self.collapse_regularization = collapse_regularization
     self.do_unpooling = do_unpooling
+    self.activation = activation
 
     # Build the model
     if hierarchy:
       raise RuntimeError('Hierarchy model is currently invalid.')
     else:
       self.encoder = Single(in_dim, n_clusters, hidden, depths,
-                            dropout, inflation, skipconn)
+                            dropout, inflation, activation, skipconn)
 
   def forward(self, inputs: Tuple[T.Tensor]) -> Tuple[T.Tensor]:
     """Perform DMoN clustering according to node features and graph.
@@ -151,22 +156,26 @@ class DMoN(nn.Module):
     """
 
     nodes, adjacency = inputs
+    if nodes.shape[0] == adjacency.shape[0]:
+      batch_size = nodes.shape[0]
+    else:
+      raise ValueError('Batch size of adjacency matrix does not match feature.')
 
     assert isinstance(nodes, T.Tensor) and isinstance(adjacency, T.Tensor),\
       TypeError(f'Expect Tensors, but got {type(nodes)} and {type(adjacency)}.')
     assert adjacency.shape[1] == nodes.shape[1],\
-      ValueError('Node number in adjacency matrix does not match features.')
+      ValueError('Node number in adjacency matrix does not match feature.')
     assert adjacency.shape[1] == adjacency.shape[2],\
       ValueError(f'Expect square adjacency matrix, but got {adjacency.shape}.')
 
     # Compute soft cluster assignments with normalized adjacency matrix
-    norm_adjacency = normalize_graph(adjacency, add_self_loops=False)
+    norm_adjacency = normalize_graph(adjacency.clone(), add_self_loops=False)
     assignments = F.softmax(self.encoder([nodes, norm_adjacency]), dim=-1)
     cluster_sizes = T.sum(assignments, dim=1)  # number of nodes in each cluster
     assignments_pooling = assignments / cluster_sizes  # shape: [B, N, k]
 
     degrees = T.sum(adjacency, dim=-1).unsqueeze(-1)  # shape: [B, N, 1]
-    num_edges = degrees.sum(-1).sum(-1) # shape: [B, ]
+    num_edges = degrees.sum(dim=[-1, -2]) # shape: [B, ]
 
     # Calculate the pooled graph C^T*A*C of shape [B, k, k]
     pooled_graph = T.matmul(assignments.permute(0, 2, 1), adjacency)
@@ -179,17 +188,23 @@ class DMoN(nn.Module):
 
     # Calculate deep modularity loss
     modularity_loss = -T.diagonal(pooled_graph-normalizer, dim1=-2, dim2=-1)\
-                        .sum()/2/num_edges
+                        .sum()/2/num_edges/batch_size
     collapse_loss = T.norm(cluster_sizes)/nodes.shape[0]\
                     * T.sqrt(T.FloatTensor([self.n_clusters])) - 1
-    collapse_loss: T.Tensor = self.collapse_regularization * collapse_loss
-    # Batch average aggregation
-    self.loss = modularity_loss.mean(dim=0) + collapse_loss.mean(dim=0)
+    collapse_loss: T.Tensor = self.collapse_regularization*collapse_loss
+    collapse_loss /= batch_size
 
     # Calcualte pooled features
     pooled_features = T.matmul(assignments_pooling.permute(0, 2, 1), nodes)
-    pooled_features = F.silu(pooled_features)  # nonlinear
+    # Nonlinear
+    if self.activation == 'relu':
+      pooled_features = F.relu(pooled_features)
+    elif self.activation == 'selu':
+      pooled_features = F.selu(pooled_features)
+    else:
+      pooled_features = F.silu(pooled_features)
+    # Unpooling
     if self.do_unpooling:
       pooled_features = T.matmul(assignments_pooling, pooled_features)
 
-    return pooled_features, assignments
+    return pooled_features, assignments, modularity_loss, collapse_loss
