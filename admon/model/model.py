@@ -61,7 +61,8 @@ class Single(nn.Module):
                      collapse_regularization=collapse_regularization,
                      do_unpooling=do_unpooling)
 
-  def forward(self, inputs: Tuple[T.Tensor, T.Tensor]) -> T.Tensor:
+  def forward(self, inputs: Tuple[T.Tensor, T.Tensor])\
+      -> Tuple[T.Tensor, T.Tensor, T.Tensor, T.Tensor]:
     """Forward function for single level.
 
     Args:

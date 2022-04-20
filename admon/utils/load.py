@@ -7,12 +7,14 @@ from typing import Tuple, Union
 
 import numpy as np
 import torch as T
+from numpy import ndarray
 from scipy.sparse import coo_matrix, csr_matrix, diags
 
 # Alias
 _PathLike = Union[str, 'os.PathLike[str]']
 
-def load_npz(file: _PathLike) -> Tuple:
+def load_npz(file: _PathLike)\
+    -> Tuple[csr_matrix, csr_matrix, ndarray, ndarray]:
   """Direct reimplementation for loading npz file.
 
   Args:
@@ -24,6 +26,7 @@ def load_npz(file: _PathLike) -> Tuple:
     as edges, dense labels array, and dense label index
     array (indices of nodes that have the labels).
   """
+  assert os.path.isfile(file), ValueError(f'Invalid file directory {file:s}')
 
   with np.load(open(file, 'rb'), allow_pickle=True) as loader:
     loader = dict(loader)  # change loader to a dictionary
@@ -49,11 +52,16 @@ def load_npz(file: _PathLike) -> Tuple:
 def load_cora(path: _PathLike='../data/cora',
               train_split: float=0.6,
               valid_split: float=0.2,
-              mask_rate: float=0.02) -> Tuple:
+              mask_rate: float=0.02,
+              seed: int=42) -> Tuple:
   """Load cora dataset.
 
   Args:
     path: CORA dataset file directory.
+    train_split: Train set ratio.
+    valid_split: Valid set ratio.
+    mask_rate: Ratio of label masked out.
+    seed: An integer seed for random state.
 
   Returns:
     A tuple of features, adjacency matrices, and labels organized in a
@@ -69,22 +77,24 @@ def load_cora(path: _PathLike='../data/cora',
   labels = onehot_encode(idx_features_labels[:, -1])
 
   idx_map = dict(enumerate(idx_features_labels[:, 0]))
-  edges_unordered: np.ndarray = np.genfromtxt(os.path.join(path, 'cora.cities'),
-                                  dtype=np.int16)
+  edges_unordered: ndarray = np.genfromtxt(os.path.join(path, 'cora.cities'),
+                                           dtype=np.int16)
   edges = np.array(list(map(idx_map.get, edges_unordered.flatten())),
                    dtype=np.int8)\
             .reshape(edges_unordered.shape)
   adjacency = coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
-                        shape=(labels.shape[0], labels.shape[0]),
-                        dtype=np.float32)
+                         shape=(labels.shape[0], labels.shape[0]),
+                         dtype=np.float32)
   # Construct symmetric adjacency matrix
   adjacency = adjacency + adjacency.T.multiply(adjacency.T > adjacency)\
                         - adjacency.multiply(adjacency.T > adjacency)
 
+  # Reproducibility
+  rs = np.random.RandomState(seed=seed)
+
   # Generate indices
   indices = np.arange(features.shape[0])
-  np.random.seed(42)  # reproducibility
-  np.random.shuffle(indices)
+  rs.shuffle(indices)
   train_up = int(indices.shape[0] * train_split)
   valid_up = int(indices.shape[0] * train_split+valid_split)
   train_indices = indices[:train_up]
@@ -95,9 +105,9 @@ def load_cora(path: _PathLike='../data/cora',
   features_train = features[train_indices]
   features_valid = features[valid_indices]
   features_test = features[test_indices]
-  labels_train: np.ndarray = labels[train_indices]
-  labels_valid: np.ndarray = labels[valid_indices]
-  labels_test: np.ndarray = labels[test_indices]
+  labels_train: ndarray = labels[train_indices]
+  labels_valid: ndarray = labels[valid_indices]
+  labels_test: ndarray = labels[test_indices]
   labels_relation_train = np.matmul(labels_train, labels_train.T)
   labels_relation_valid = np.matmul(labels_valid, labels_valid.T)
   labels_test = np.argmax(labels_test, axis=-1)
@@ -107,12 +117,12 @@ def load_cora(path: _PathLike='../data/cora',
   labels_relation_valid[np.where(labels_relation_valid==0)] = -1
 
   # Create random mask
-  mask_train = np.random.choice([1, 0],
-                                size=labels_relation_train,
-                                p=[mask_rate, 1-mask_rate])
-  mask_valid = np.random.choice([1, 0],
-                                size=labels_relation_valid,
-                                p=[mask_rate, 1-mask_rate])
+  mask_train = rs.choice([1, 0],
+                         size=labels_relation_train,
+                         p=[mask_rate, 1-mask_rate])
+  mask_valid = rs.choice([1, 0],
+                         size=labels_relation_valid,
+                         p=[mask_rate, 1-mask_rate])
 
   # Mask out relation labels
   labels_train_masked = mask_train * labels_relation_train
@@ -176,7 +186,7 @@ def row_normalize(matrix: csr_matrix) -> csr_matrix:
 
   return matrix
 
-def onehot_encode(labels: np.ndarray) -> np.ndarray:
+def onehot_encode(labels: ndarray) -> ndarray:
   """Generate one-hot encoding of a label vector.
 
   Args:
