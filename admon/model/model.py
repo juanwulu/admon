@@ -71,8 +71,11 @@ class Single(nn.Module):
       The second tensor is a `[N, N]` square adjacency matrix.
 
     Returns:
-      A tensor of shape `[N, k]` with each element as probability for
-      a node in a given cluster.
+      A tuple of PyTorch tensors. The first tensor is a `[B, k, d]` centroid
+      embedding of `k` cluster centroids. But if do_unpooling, it becomes a
+      `[B, N, d]` unpooled feature tensor instead. The second tensor is a
+      `[B, N, k]` cluster label tensor. The third and fourth tensor are
+      respectively the modularity and conductance losses.
     """
 
     assert len(inputs) == 2,\
@@ -88,7 +91,7 @@ class Single(nn.Module):
       norm_graph = normalize_graph(graph.clone(), add_self_loops=True)
     features, _ = self.encoder([features, norm_graph])  # norm graph for gcn
 
-    pooled_features, pred, m_loss, c_loss = self.dmon([features, graph])
+    pooled_features, pred, m_loss, c_loss = self.dmon.forward([features, graph])
 
     return pooled_features, pred, m_loss, c_loss
 

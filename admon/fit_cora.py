@@ -1,6 +1,6 @@
 # !/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Main training function for DMoN."""
+"""Fit graph clustering data on CORA dataset."""
 
 import argparse
 import logging
@@ -8,9 +8,9 @@ import sys
 
 import numpy as np
 import torch as T
-import torch.optim as optim
 import torchinfo
 from sklearn.metrics import normalized_mutual_info_score as nmi
+from torch import optim
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
