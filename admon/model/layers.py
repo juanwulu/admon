@@ -3,7 +3,7 @@
 """Layers for the graph neural networks."""
 
 import math
-from typing import Callable, Tuple, Union
+from typing import Callable, Tuple, Optional, Union
 
 import torch as T
 import torch.nn as nn
@@ -173,7 +173,8 @@ class DMoN(nn.Module):
     nn.init.orthogonal_(self.transform[0].weight)
     nn.init.zeros_(self.transform[0].bias)
 
-  def forward(self, inputs: Tuple[T.Tensor]) -> Tuple[T.Tensor]:
+  def forward(self, inputs: Tuple[T.Tensor])\
+      -> Tuple[T.Tensor, T.Tensor, T.Tensor, T.Tensor]:
     """Perform DMoN clustering according to node features and graph.
 
     Args:
@@ -236,3 +237,84 @@ class DMoN(nn.Module):
       pooled_features = T.matmul(assignments_pooling, pooled_features)
 
     return pooled_features, assignments, modularity_loss, collapse_loss
+
+class GLNN(nn.Module):
+  """PyTorch re-implementation of Graph learning layer.
+
+  This re-implementation is based on the paper "Exploring structure-adaptive 
+  graph learning for robust semi-supervised classification" by Gao, et al.
+
+  Attributes:
+    alpha: A weighting parameter for supervised adjacency learning.
+    betas: A tuple of weighting parameters.
+    n_nodes: An integer number of nodes in the graph.
+  """
+
+  def __init__(self, n_nodes: int, alpha: float=10,
+                betas: Tuple=(0.1, 0., 0.1, 0.001),) -> None:
+    """Initialize Graph Learning Layer
+
+    Args:
+      alpha: A weighting parameter for supervised adjacency learning.
+      betas: A tuple of weighting parameters.
+    """
+
+    assert len(betas) == 5, ValueError(f'Expect 5 weights, but got {len(betas):d}!')
+    self.alpha = alpha
+    self.betas = betas
+    self.n_nodes = n_nodes
+
+    # Initialization
+    self.adj = nn.Parameter(T.FloatTensor(n_nodes, n_nodes))
+    self.dummy = nn.Parameter(T.FloatTensor(1))
+
+    self.init_parameters()
+
+  def init_parameters(self) -> None:
+    """Randomly initialize parameters."""
+    stdv = 1 / math.sqrt(self.n_nodes)
+    self.adj.data.uniform_(-stdv, stdv)
+
+  def forward(self, inputs: Tuple[T.Tensor, Optional[T.Tensor]])\
+      -> Tuple[T.Tensor, T.Tensor, T.Tensor, T.Tensor]:
+    """Forward function.
+
+    Args:
+      inputs: A tuple of PyTorch tensors. The frist tensor is a `[B, N, d]`
+      node embedding matrix of `N` nodes with `d` as size of features;
+      The second tensor is an optional `[B, N, N]` target adjacency matrix.
+
+    Returns:
+      A tuple of PyTorch tensors. The first tensor is the predicted adjacency matrix
+      of size `[N, N]`, the second tensor is the Graph Laplacian Regularizer (GLR)
+      loss, the third one is the sparsity loss, the fourth one a property loss,
+      and the last one groud truth loss. If target adjacency matrix is not given,
+      the ground truth loss is `None`.
+    """
+
+    features, graph = inputs
+    features = features.float()
+
+    adj_out = (self.adj.T + self.adj) / 2
+
+    # graph laplacian loss
+    identity = T.eye(self.n_nodes).to(self.dummy.device)
+    glr = T.matmul(T.matmul(features.T, (identity - adj_out)), features)
+    loss_glr = self.betas[0] * T.norm(glr, p=2) ** 2
+
+    # sparsity loss
+    loss_sparsity = self.betas[1] * T.norm(adj_out, p=1)
+
+    # property loss
+    unit = T.ones(self.n_nodes).to(self.dummy.device)
+    loss_prop = self.betas[2] * T.norm(adj_out.T - adj_out, p=2) ** 2 +\
+                self.betas[3] * T.norm(T.matmul(adj_out, unit) - unit, p=2) ** 2 +\
+                self.betas[4] * T.abs(T.trace(adj_out)) ** 2
+
+    # supervised loss
+    if graph is not None:
+      loss_gt = T.norm(adj_out - graph, p=2) ** 2
+    else:
+      loss_gt = None
+
+    return adj_out, loss_glr, loss_sparsity, loss_prop, loss_gt
