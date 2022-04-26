@@ -70,7 +70,7 @@ class Single(nn.Module):
                      do_unpooling=do_unpooling)
 
   def forward(self, inputs: Tuple[T.Tensor, T.Tensor])\
-      -> Tuple[T.Tensor, T.Tensor, Dict[str, T.Tensor]]:
+      -> Tuple[T.Tensor, T.Tensor, T.Tensor, Dict[str, T.Tensor]]:
     """Forward function for single level.
 
     Args:
@@ -82,8 +82,9 @@ class Single(nn.Module):
       A tuple of PyTorch tensors and a dictionary. The first tensor is a 
       `[B, k, d]` centroid embedding of `k` cluster centroids. If do_unpooling,
       it becomes a `[B, N, d]` unpooled feature tensor instead. The second
-      tensor is a `[B, N, k]` cluster label tensor. The third element is a
-      dictionary of all the relevant losses.
+      tensor is a `[B, N, k]` cluster label tensor. The third tensor is a
+      `[B, N, N]` adjacency matrix tensor. The last element is a dictionary
+      consisting of all the relevant losses.
     """
 
     assert len(inputs) == 2,\
@@ -119,7 +120,7 @@ class Single(nn.Module):
                     'Modularity Loss': m_loss,
                     'Collapse Loss': c_loss}
 
-    return pooled_features, pred, losses
+    return pooled_features, pred, norm_graph, losses
 
 class Hierachy(nn.Module):
   """

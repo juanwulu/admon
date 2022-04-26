@@ -94,7 +94,7 @@ def fit_model(args: argparse.Namespace) -> None:
         inputs = (feature_tensor, adj_tensor)
       else:
         inputs = (feature_tensor, None)
-      _, _, losses = model.forward(inputs)
+      _, _, _, losses = model.forward(inputs)
       loss: T.Tensor = T.FloatTensor([0], device=device)
       for loss_val in losses.values():
         if loss_val is not None:
@@ -111,7 +111,7 @@ def fit_model(args: argparse.Namespace) -> None:
 
     # Validation procedure
     model.eval()
-    pooled_features, preds, _ = model.forward((feature_tensor, adj_tensor))
+    pooled_features, preds, adj_pred, _ = model.forward((feature_tensor, adj_tensor))
     pred_labels = preds[0].detach().cpu().numpy().argmax(axis=-1)
     mod_score: float = modularity(adj, pred_labels)
     cond_score: float = conductance(adj, pred_labels)
@@ -144,6 +144,7 @@ def fit_model(args: argparse.Namespace) -> None:
       pred_info: Dict = OrderedDict()
       pred_info['pooled_features'] = pooled_features
       pred_info['assignments'] = pred_labels
+      pred_info['adjacency'] = adj_pred
       pred_info['modularity'] = mod_score
       pred_info['conductance'] = cond_score
       if labels is not None and label_indices is not None:
