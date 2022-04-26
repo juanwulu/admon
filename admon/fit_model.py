@@ -66,11 +66,13 @@ def fit_model(args: argparse.Namespace) -> None:
     # Main procedure
     # TODO (Juanwu): support hierarchical model
     _logger.info('Initializing graph clustering model...')
+    betas = tuple(args.betas) if args.betas is not None else None
     model = Single(in_dim=feature_tensor.size(-1),
                    n_clusters=args.n_clusters,
                    hidden=args.hidden, depths=args.depths,
-                   dropout=args.dropout, inflation=args.inflation,
-                   skip_conn=args.skip_conn,
+                   dropout=args.dropout, inflation=args.inflation, skip_conn=args.skip_conn,
+                   graph_learning=args.graph_learning, n_nodes=feature_tensor.size(-2),
+                   alpha=args.alpha, betas=betas,
                    collapse_regularization=args.collapse_regularization,
                    do_unpooling=args.do_unpooling)
     model = model.to(device)
@@ -88,19 +90,28 @@ def fit_model(args: argparse.Namespace) -> None:
       model.train()
       optimizer.zero_grad()
 
-      _, _, m_loss, c_loss = model.forward((feature_tensor,
-                                            adj_tensor))
-      loss: T.Tensor = m_loss + c_loss
+      if args.graph_gt or not args.graph_learning:
+        inputs = (feature_tensor, adj_tensor)
+      else:
+        inputs = (feature_tensor, None)
+      _, _, losses = model.forward(inputs)
+      loss: T.Tensor = T.FloatTensor([0], device=device)
+      for loss_val in losses.values():
+        if loss_val is not None:
+          loss += loss_val
       loss.backward()
       optimizer.step()
       scheduler.step()
 
-      _logger.info('Train [%d/%d]: Modularity loss %.4f Collapse loss %.4f',
-                   epoch+1, args.epoch, m_loss, c_loss)
+      msg: str = ''
+      for name, val in losses.items():
+        if val is not None:
+          msg += f' {name}: {val.item():.4f}'
+      _logger.info('Train [%d/%d]:%s', epoch+1, args.epoch, msg)
 
     # Validation procedure
     model.eval()
-    pooled_features, preds, _, _ = model.forward((feature_tensor, adj_tensor))
+    pooled_features, preds, _ = model.forward((feature_tensor, adj_tensor))
     pred_labels = preds[0].detach().cpu().numpy().argmax(axis=-1)
     mod_score: float = modularity(adj, pred_labels)
     cond_score: float = conductance(adj, pred_labels)
@@ -146,6 +157,10 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--activation', type=str, default='selu',
                       help='Name of activation function')
+  parser.add_argument('--alpha', type=float, default=10.,
+                      help='Weight for ground truth training')
+  parser.add_argument('--betas', nargs='+', type=float,
+                      default=None, help='Structure adaptation training weights')
   parser.add_argument('--collapse-regularization', type=float,
                       default=1e-3, help='Collapse loss weight')
   parser.add_argument('--cuda', action='store_true',
@@ -158,13 +173,17 @@ if __name__ == '__main__':
                       help='Dropout rate')
   parser.add_argument('--epoch', type=int, default=200,
                       help='Number of epochs to train')
-  parser.add_argument('--hidden', type=int, default=512,
+  parser.add_argument('--graph-gt', action='store_true',
+                      default=False, help='Use ground truth adjacency matrix')
+  parser.add_argument('--graph-learning', action='store_true',
+                      default=False, help='Enable structure adaptation')
+  parser.add_argument('--hidden', type=int, default=1024,
                       help='Number of neurons in hidden layers')
   parser.add_argument('--inflation', type=int, default=1,
                       help='Inflation factor')
   parser.add_argument('--log-dir', type=str, required=True,
                       help='Logging direction')
-  parser.add_argument('--lr', type=float, default=1e-3,
+  parser.add_argument('--lr', type=float, default=0.01,
                       help='Learning rate')
   parser.add_argument('--lr-decay-gamma', type=float, default=1.,
                       help='Multiplicative factor for lr decay')

@@ -251,7 +251,7 @@ class GLNN(nn.Module):
   """
 
   def __init__(self, n_nodes: int, alpha: float=10,
-                betas: Tuple=(0.1, 0., 0.1, 0.001),) -> None:
+                betas: Tuple=(0.01, 0.1, 0., 0.1, 0.001),) -> None:
     """Initialize Graph Learning Layer
 
     Args:
@@ -260,12 +260,13 @@ class GLNN(nn.Module):
     """
 
     assert len(betas) == 5, ValueError(f'Expect 5 weights, but got {len(betas):d}!')
+    super().__init__()
     self.alpha = alpha
     self.betas = betas
     self.n_nodes = n_nodes
 
     # Initialization
-    self.adj = nn.Parameter(T.FloatTensor(n_nodes, n_nodes))
+    self.adj = nn.Parameter(T.FloatTensor(n_nodes, n_nodes).unsqueeze(0))
     self.dummy = nn.Parameter(T.FloatTensor(1))
 
     self.init_parameters()
@@ -295,24 +296,25 @@ class GLNN(nn.Module):
     features, graph = inputs
     features = features.float()
 
-    adj_out = (self.adj.T + self.adj) / 2
+    adj_out = (self.adj.permute(0, 2, 1) + self.adj) / 2
 
     # graph laplacian loss
-    identity = T.eye(self.n_nodes).to(self.dummy.device)
-    glr = T.matmul(T.matmul(features.T, (identity - adj_out)), features)
-    loss_glr = self.betas[0] * T.norm(glr, p=2) ** 2
+    identity = T.eye(n=self.n_nodes).unsqueeze(0).to(self.dummy.device)
+    glr = T.matmul(T.matmul(features.permute(0, 2, 1), (identity - adj_out)), features)
+    loss_glr = self.betas[0] * T.norm(glr, p='fro') ** 2
 
     # sparsity loss
     loss_sparsity = self.betas[1] * T.norm(adj_out, p=1)
 
     # property loss
     unit = T.ones(self.n_nodes).to(self.dummy.device)
-    loss_prop = self.betas[2] * T.norm(adj_out.T - adj_out, p=2) ** 2 +\
-                self.betas[3] * T.norm(T.matmul(adj_out, unit) - unit, p=2) ** 2 +\
-                self.betas[4] * T.abs(T.trace(adj_out)) ** 2
+    loss_prop = self.betas[2] * T.norm(adj_out.permute(0, 2, 1) - adj_out, p='fro') ** 2 +\
+                self.betas[3] * T.norm(T.matmul(adj_out, unit) - unit, p='fro') ** 2 +\
+                self.betas[4] * T.abs(T.diagonal(adj_out, dim1=-2, dim2=-1).sum()) ** 2
 
     # supervised loss
     if graph is not None:
+      graph = graph.float()
       loss_gt = T.norm(adj_out - graph, p=2) ** 2
     else:
       loss_gt = None
