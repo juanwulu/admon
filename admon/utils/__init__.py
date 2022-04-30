@@ -6,6 +6,6 @@ from .metrics import pairwise_precision, pairwise_recall
 from .metrics import conductance, modularity
 
 __all__ = ['normalize_graph',
-           'load_npz', 'load_pkl'
+           'load_npz', 'load_pkl',
            'pairwise_precision', 'pairwise_recall',
            'conductance', 'modularity']

@@ -85,7 +85,8 @@ def conductance(adj: np.matrix, clusters: np.ndarray) -> float:
 
   return intra_edge / (inter_edge + intra_edge)
 
-def modularity(adj: Union[csr_matrix, np.ndarray], clusters: np.ndarray) -> float:
+def modularity(adj: Union[csr_matrix, np.ndarray],
+               clusters: np.ndarray) -> float:
   """Calculate total cluster modularity given the graph adjacency matrix.
 
   The total modularity is the sum of modularity with respect to subgraphs

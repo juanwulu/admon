@@ -6,7 +6,7 @@ from collections import OrderedDict
 from typing import Dict, Optional, Tuple
 
 import torch as T
-import torch.nn as nn
+from torch import nn
 
 from admon.model import GCNLayer, DMoN, GLNN
 from admon.utils import normalize_graph
@@ -79,7 +79,7 @@ class Single(nn.Module):
       The second tensor is an optional `[N, N]` target adjacency matrix.
 
     Returns:
-      A tuple of PyTorch tensors and a dictionary. The first tensor is a 
+      A tuple of PyTorch tensors and a dictionary. The first tensor is a
       `[B, k, d]` centroid embedding of `k` cluster centroids. If do_unpooling,
       it becomes a `[B, N, d]` unpooled feature tensor instead. The second
       tensor is a `[B, N, k]` cluster label tensor. The third tensor is a
@@ -91,7 +91,6 @@ class Single(nn.Module):
       ValueError(f'Expect input to have 2 elements, but got {len(inputs)}.')
 
     features, graph = inputs
-    batch_size: int = features.size(0)
     features = features.float()
     if graph is not None:
       graph = graph.float()
@@ -104,11 +103,10 @@ class Single(nn.Module):
 
     if self.glnn is not None:
       inputs = (features, norm_graph)
-      norm_graph, glr_loss, sp_loss, prop_loss, gt_loss = self.glnn.forward(inputs)
+      norm_graph, glr_loss, sp_loss, p_loss, gt_loss = self.glnn.forward(inputs)
       graph = norm_graph
     else:
-      glr_loss, sp_loss, prop_loss, gt_loss = None, None, None, None
-      
+      glr_loss, sp_loss, p_loss, gt_loss = None, None, None, None
 
     features, _ = self.encoder([features, norm_graph])  # norm graph for gcn
 
@@ -116,7 +114,7 @@ class Single(nn.Module):
 
     losses: Dict = {'GLR Loss': glr_loss,
                     'Sparsity Loss': sp_loss,
-                    'Property Loss': prop_loss,
+                    'Property Loss': p_loss,
                     'Groud Truth Loss': gt_loss,
                     'Modularity Loss': m_loss,
                     'Collapse Loss': c_loss}

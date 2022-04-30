@@ -6,8 +6,8 @@ import math
 from typing import Callable, Tuple, Optional, Union
 
 import torch as T
-import torch.nn as nn
-import torch.nn.functional as F
+from torch import nn
+from torch.nn import functional as F
 
 class GCNLayer(nn.Module):
   """Graph Convolutional Network Layer.
@@ -205,7 +205,7 @@ class DMoN(nn.Module):
     # Compute soft cluster assignments with normalized adjacency matrix
     assignments = F.softmax(self.transform(nodes), dim=-1)
     cluster_sizes = assignments.sum(dim=1)  # number of nodes in each cluster
-    assignments_pooling = assignments / cluster_sizes.unsqueeze(1) # shape: [B, N, k]
+    assignments_pooling = assignments / cluster_sizes.unsqueeze(1)
 
     degrees = T.sum(adjacency, dim=1).unsqueeze(-1)  # shape: [B, N, 1]
     num_edges = degrees.sum(dim=[-1, -2]) # shape: [B, ]
@@ -243,7 +243,7 @@ class DMoN(nn.Module):
 class GLNN(nn.Module):
   """PyTorch re-implementation of Graph learning layer.
 
-  This re-implementation is based on the paper "Exploring structure-adaptive 
+  This re-implementation is based on the paper "Exploring structure-adaptive
   graph learning for robust semi-supervised classification" by Gao, et al.
 
   Attributes:
@@ -261,10 +261,11 @@ class GLNN(nn.Module):
       betas: A tuple of weighting parameters.
     """
 
-    assert len(betas) == 5, ValueError(f'Expect 5 weights, but got {len(betas):d}!')
+    assert len(betas) == 5,\
+        ValueError(f'Expect 5 weights, but got {len(betas):d}!')
     super().__init__()
     self.alpha = alpha
-    self.betas = betas
+    self.beta = betas
     self.n_nodes = n_nodes
 
     # Initialization
@@ -288,11 +289,11 @@ class GLNN(nn.Module):
       The second tensor is an optional `[B, N, N]` target adjacency matrix.
 
     Returns:
-      A tuple of PyTorch tensors. The first tensor is the predicted adjacency matrix
-      of size `[N, N]`, the second tensor is the Graph Laplacian Regularizer (GLR)
-      loss, the third one is the sparsity loss, the fourth one a property loss,
-      and the last one groud truth loss. If target adjacency matrix is not given,
-      the ground truth loss is `None`.
+      A tuple of PyTorch tensors. The first tensor is the predicted adjacency
+      matrix of size `[N, N]`, the second tensor is the Graph Laplacian
+      Regularizer (GLR) loss, the third one is the sparsity loss, the fourth
+      one a property loss, and the last one groud truth loss. If target
+      adjacency matrix is not given, the ground truth loss is `None`.
     """
 
     features, graph = inputs
@@ -302,17 +303,18 @@ class GLNN(nn.Module):
 
     # graph laplacian loss
     identity = T.eye(n=self.n_nodes).unsqueeze(0).to(self.dummy.device)
-    glr = T.matmul(T.matmul(features.permute(0, 2, 1), (identity - adj_out)), features)
-    loss_glr = self.betas[0] * T.norm(glr, p='fro') ** 2
+    glr = T.matmul(T.matmul(features.permute(0, 2, 1),
+                            (identity - adj_out)), features)
+    loss_glr = self.beta[0] * T.norm(glr, p='fro') ** 2
 
     # sparsity loss
-    loss_sparsity = self.betas[1] * T.norm(adj_out, p=1)
+    loss_sparsity = self.beta[1] * T.norm(adj_out, p=1)
 
     # property loss
     unit = T.ones(self.n_nodes).to(self.dummy.device)
-    loss_prop = self.betas[2] * T.norm(adj_out.permute(0, 2, 1) - adj_out, p='fro') ** 2 +\
-                self.betas[3] * T.norm(T.matmul(adj_out, unit) - unit, p='fro') ** 2 +\
-                self.betas[4] * T.abs(T.diagonal(adj_out, dim1=-2, dim2=-1).sum()) ** 2
+    loss_prop = self.beta[2]*T.norm(adj_out.permute(0,2,1)-adj_out,p='fro')**2+\
+                self.beta[3]*T.norm(T.matmul(adj_out,unit)-unit,p='fro')**2 +\
+                self.beta[4]*T.abs(T.diagonal(adj_out,dim1=-2,dim2=-1).sum())**2
 
     # supervised loss
     if graph is not None:

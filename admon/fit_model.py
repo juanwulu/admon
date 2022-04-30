@@ -10,7 +10,9 @@ import time
 from collections import OrderedDict
 from typing import Dict,  Union
 
+import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 import torch as T
 import torchinfo
 from sklearn.metrics import normalized_mutual_info_score as nmi
@@ -30,10 +32,13 @@ _logger = logging.getLogger(__name__)
 logging.basicConfig(format='# %(asctime)s %(name)s %(message)s',
                     level=logging.INFO, stream=sys.stdout,
                     datefmt='%Y%m%d %H:%M:%S %p')
+plt.style.use('seaborn-poster')
+sns.set_style('white')
 
 def fit_model(args: argparse.Namespace) -> None:
   """Fit graph clustering model."""
 
+  init_time = time.time()
   if args.cuda and T.cuda.is_available():
     device = T.device('cuda:0')
   else:
@@ -44,10 +49,18 @@ def fit_model(args: argparse.Namespace) -> None:
   T.manual_seed(args.seed)
   T.cuda.manual_seed(args.seed)
 
-  # SummaryWriter
+  # Tracking
+  if not os.path.isdir(os.path.join(args.log_dir, 'checkpoints')):
+    os.makedirs(os.path.join(args.log_dir, 'checkpoints'))
+  if not os.path.isdir(os.path.join(args.log_dir, 'log')):
+    os.makedirs(os.path.join(args.log_dir, 'log'))
+  if not os.path.isdir(os.path.join(args.log_dir, 'log/exp')):
+    os.makedirs(os.path.join(args.log_dir, 'log/exp'))
   writer = SummaryWriter(log_dir=os.path.join(args.log_dir, 'log/runs',
-                                              f'{time.time()}_exp'))
+                                              f'{init_time}_exp'))
 
+  best_mod_score: float = 0.
+  best_cond_score: float = 1.
   with logging_redirect_tqdm():
     # Load dataset
     _logger.info('Loading dataset from %s', args.path)
@@ -86,8 +99,10 @@ def fit_model(args: argparse.Namespace) -> None:
     model = Single(in_dim=feature_tensor.size(-1),
                    n_clusters=args.n_clusters,
                    hidden=args.hidden, depths=args.depths,
-                   dropout=args.dropout, inflation=args.inflation, skip_conn=args.skip_conn,
-                   graph_learning=args.graph_learning, n_nodes=feature_tensor.size(-2),
+                   dropout=args.dropout, inflation=args.inflation,
+                   skip_conn=args.skip_conn,
+                   graph_learning=args.graph_learning,
+                   n_nodes=feature_tensor.size(-2),
                    alpha=args.alpha, betas=betas,
                    collapse_regularization=args.collapse_regularization,
                    do_unpooling=args.do_unpooling)
@@ -122,7 +137,7 @@ def fit_model(args: argparse.Namespace) -> None:
       scheduler.step()
 
       # tracking
-      writer.add_scalar('Train/Total loss', loss.item(), global_train_step)
+      writer.add_scalar('Train/Total Loss', loss.item(), global_train_step)
       msg: str = ''
       for name, val in losses.items():
         if val is not None:
@@ -134,11 +149,14 @@ def fit_model(args: argparse.Namespace) -> None:
       # Validation procedure
       model.eval()
       if args.graph_gt or not args.graph_learning:
-        pooled_features, preds, adj_pred, _ = model.forward((feature_tensor, adj_tensor))
+        p_emb, preds, adj_pred, _ = model.forward((feature_tensor, adj_tensor))
       else:
         # If graph learning, we use the graph we've learned
-        pooled_features, preds, adj_pred, _ = model.forward((feature_tensor, None))
+        p_emb, preds, adj_pred, _ = model.forward((feature_tensor, None))
         adj = adj_pred[0].detach().cpu().numpy()
+      # fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+      # ax = sns.heatmap(adj, linewidths=.5, ax=ax)
+      # writer.add_figure('Adjacency Matrix', fig, global_test_step)
 
       mod_score, cond_score = 0., 0.
       nmi_score, f1_score = 0., 0.
@@ -158,44 +176,49 @@ def fit_model(args: argparse.Namespace) -> None:
           recl = pairwise_recall(label, pred_label)
           f1_score += 2 * prec * recl / (prec + recl)
 
-      writer.add_scalar('Valid/Modularity', mod_score / len(preds), global_test_step)
-      writer.add_scalar('Valid/Conductance', cond_score / len(preds), global_test_step)
-      writer.add_scalar('Valid/NMI', nmi_score / len(preds), global_test_step)
-      writer.add_scalar('Valid/F1', f1_score / len(preds), global_test_step)
+      # Batch average
+      mod_score = mod_score / len(preds)
+      cond_score = cond_score / len(preds)
+      nmi_score = nmi_score / len(preds)
+      f1_score = nmi_score / len(preds)
+
+      writer.add_scalar('Valid/Modularity', mod_score, global_test_step)
+      writer.add_scalar('Valid/Conductance', cond_score, global_test_step)
+      writer.add_scalar('Valid/NMI', nmi_score, global_test_step)
+      writer.add_scalar('Valid/F1', f1_score, global_test_step)
       global_test_step += 1
 
-      _logger.info('Valid [%d/%d]: Conductance %.4f Modularity %.4f NMI %.4f F1 %.4f',
+      _logger.info('Valid [%d/%d]: Conduc. %.4f Modular. %.4f NMI %.4f F1 %.4f',
                     epoch + 1, args.epoch,
-                    cond_score / len(preds), mod_score / len(preds),
-                    nmi_score / len(preds), f1_score / len(preds))
+                    cond_score, mod_score,
+                    nmi_score, f1_score)
 
-    # Dump checkpoints
-    if not os.path.isdir(os.path.join(args.log_dir, 'checkpoints')):
-      os.makedirs(os.path.join(args.log_dir, 'checkpoints'))
-    if not os.path.isdir(os.path.join(args.log_dir, 'log')):
-      os.makedirs(os.path.join(args.log_dir, 'log'))
-    if not os.path.isdir(os.path.join(args.log_dir, 'log/outputs')):
-      os.makedirs(os.path.join(args.log_dir, 'log/outputs'))
+      # Save checkpoints
+      if mod_score >= best_mod_score and cond_score <= best_cond_score:
+        ckpt_file = f'{init_time}.single.{feature_tensor.size(-1):d}.pt'
+        with open(os.path.join(args.log_dir, 'checkpoints',
+                               ckpt_file), 'wb') as f:
+          ckpt: Dict = OrderedDict()
+          ckpt['state_dict'] = model.state_dict()
+          ckpt['optim_dict'] = optimizer.state_dict()
+          T.save(ckpt, f=f)
 
-    # TODO (Juanwu): Load checkpoints
-    ckpt_file = f'{time.time()}.single.{feature_tensor.size(-1):d}.pt'
-    with open(os.path.join(args.log_dir, 'checkpoints', ckpt_file), 'wb') as f:
-      ckpt: Dict = OrderedDict()
-      ckpt['state_dict'] = model.state_dict()
-      ckpt['optim_dict'] = optimizer.state_dict()
+        pred_file = f'{init_time}.{file_name:s}.{feature_tensor.size(-1)}.npz'
+        with open(os.path.join(args.log_dir, 'log/exp', pred_file), 'wb') as f:
+          pred_info: Dict = OrderedDict()
+          pred_info['pooled_features'] = p_emb
+          pred_info['assignments'] = preds
+          pred_info['adjacency'] = adj_pred
+          pred_info['modularity'] = mod_score
+          pred_info['conductance'] = cond_score
+          if labels is not None and label_indices is not None:
+            pred_info['nmi_score'] = nmi_score
+            pred_info['f1_score'] = f1_score
+          np.savez(f, pred_info)
 
-    pred_file = f'{time.time()}.{file_name:s}.{feature_tensor.size(-1)}.npz'
-    with open(os.path.join(args.log_dir, 'log/exp', pred_file), 'wb') as f:
-      pred_info: Dict = OrderedDict()
-      pred_info['pooled_features'] = pooled_features
-      pred_info['assignments'] = pred_labels
-      pred_info['adjacency'] = adj_pred
-      pred_info['modularity'] = mod_score
-      pred_info['conductance'] = cond_score
-      if labels is not None and label_indices is not None:
-        pred_info['nmi_score'] = nmi_score
-        pred_info['f1_score'] = f1_score
-      np.savez(f, pred_info)
+        # Update best scores
+        best_mod_score = max(best_mod_score, mod_score)
+        best_cond_score = min(best_cond_score, cond_score)
 
 
 
@@ -206,7 +229,7 @@ if __name__ == '__main__':
   parser.add_argument('--alpha', type=float, default=10.,
                       help='Weight for ground truth training')
   parser.add_argument('--betas', nargs='+', type=float,
-                      default=None, help='Structure adaptation training weights')
+                      default=None, help='Structure adaptation weights')
   parser.add_argument('--collapse-regularization', type=float,
                       default=1e-3, help='Collapse loss weight')
   parser.add_argument('--cuda', action='store_true',
