@@ -2,8 +2,10 @@
 # -*- coding: utf-8 -*-
 """Performance metrics functions."""
 
-import numpy as np
+from typing import Union
 
+import numpy as np
+from scipy.sparse import csr_matrix
 from sklearn.metrics import cluster
 
 # Supervised label alignment metrics for reproduction only
@@ -83,7 +85,7 @@ def conductance(adj: np.matrix, clusters: np.ndarray) -> float:
 
   return intra_edge / (inter_edge + intra_edge)
 
-def modularity(adj: np.matrix, clusters: np.ndarray) -> float:
+def modularity(adj: Union[csr_matrix, np.ndarray], clusters: np.ndarray) -> float:
   """Calculate total cluster modularity given the graph adjacency matrix.
 
   The total modularity is the sum of modularity with respect to subgraphs
@@ -100,6 +102,8 @@ def modularity(adj: np.matrix, clusters: np.ndarray) -> float:
   assert adj.shape[0] == adj.shape[1], ValueError('Nonsquare adjacency matrix!')
 
   # Calculate degrees as sum over rows
+  if not isinstance(adj, csr_matrix):
+    adj = np.matrix(adj)
   degrees: np.ndarray = adj.sum(axis=1).A1  # shape: [N, ]
   n = degrees.sum()  # total number of half edges n=2m
   result = 0

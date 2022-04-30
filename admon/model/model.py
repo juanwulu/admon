@@ -91,6 +91,7 @@ class Single(nn.Module):
       ValueError(f'Expect input to have 2 elements, but got {len(inputs)}.')
 
     features, graph = inputs
+    batch_size: int = features.size(0)
     features = features.float()
     if graph is not None:
       graph = graph.float()

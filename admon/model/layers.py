@@ -173,7 +173,7 @@ class DMoN(nn.Module):
     nn.init.orthogonal_(self.transform[0].weight)
     nn.init.zeros_(self.transform[0].bias)
 
-  def forward(self, inputs: Tuple[T.Tensor])\
+  def forward(self, inputs: Tuple[T.Tensor, T.Tensor])\
       -> Tuple[T.Tensor, T.Tensor, T.Tensor, T.Tensor]:
     """Perform DMoN clustering according to node features and graph.
 
@@ -190,10 +190,10 @@ class DMoN(nn.Module):
     """
 
     nodes, adjacency = inputs
-    if nodes.shape[0] == adjacency.shape[0]:
-      batch_size = nodes.shape[0]
-    else:
-      raise ValueError('Batch size of adjacency matrix does not match feature.')
+    batch_size = nodes.size(0)
+    num_nodes = nodes.size(1)
+    if not nodes.shape[0] == adjacency.shape[0]:
+      adjacency = adjacency.repeat(batch_size, 1, 1)
 
     assert isinstance(nodes, T.Tensor) and isinstance(adjacency, T.Tensor),\
       TypeError(f'Expect Tensors, but got {type(nodes)} and {type(adjacency)}.')
@@ -204,8 +204,8 @@ class DMoN(nn.Module):
 
     # Compute soft cluster assignments with normalized adjacency matrix
     assignments = F.softmax(self.transform(nodes), dim=-1)
-    cluster_sizes = T.sum(assignments, dim=1)  # number of nodes in each cluster
-    assignments_pooling = assignments / cluster_sizes  # shape: [B, N, k]
+    cluster_sizes = assignments.sum(dim=1)  # number of nodes in each cluster
+    assignments_pooling = assignments / cluster_sizes.unsqueeze(1) # shape: [B, N, k]
 
     degrees = T.sum(adjacency, dim=1).unsqueeze(-1)  # shape: [B, N, 1]
     num_edges = degrees.sum(dim=[-1, -2]) # shape: [B, ]
@@ -217,15 +217,17 @@ class DMoN(nn.Module):
     # Calculate the dyad normalizer matrix C^T*d^T*d*S of shape [B, k, k]
     dyad_left = T.matmul(assignments.permute(0, 2, 1), degrees)
     dyad_right = T.matmul(degrees.permute(0, 2, 1), assignments)
-    normalizer = T.matmul(dyad_left, dyad_right)/2/num_edges
+    normalizer = T.matmul(dyad_left, dyad_right)
+    normalizer = normalizer / 2 / num_edges[:, None, None]
 
     # Calculate deep modularity loss
     modularity_loss = -T.diagonal(pooled_graph-normalizer, dim1=-2, dim2=-1)\
-                        .sum()/2/num_edges/batch_size
-    collapse_loss = T.norm(cluster_sizes)/nodes.shape[0]\
+                        .sum() / 2 / num_edges / batch_size
+    modularity_loss = T.mean(modularity_loss, dim=0)
+    collapse_loss = T.norm(cluster_sizes, dim=-1) / num_nodes\
                     * T.sqrt(T.FloatTensor([self.n_clusters])) - 1
     collapse_loss: T.Tensor = self.collapse_regularization * collapse_loss
-    collapse_loss /= batch_size
+    collapse_loss = T.mean(collapse_loss, dim=0)  # Batch mean
 
     # Calcualte pooled features
     pooled_features = T.matmul(assignments_pooling.permute(0, 2, 1), nodes)

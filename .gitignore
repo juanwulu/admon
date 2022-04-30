@@ -129,7 +129,8 @@ dmypy.json
 .pyre/
 
 # Local root folders
+/checkpoints
 /data
 /log
-/checkpoints
+/notebook
 .vscode/

@@ -19,7 +19,7 @@ from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from admon.model import Single
-from admon.utils import load_npz
+from admon.utils import load_npz, load_pkl
 from admon.utils import conductance, modularity
 from admon.utils import pairwise_precision, pairwise_recall
 
@@ -51,6 +51,7 @@ def fit_model(args: argparse.Namespace) -> None:
     file_type = path.split('.')[-1]
 
     if os.path.isfile(path) and file_type == 'npz':
+      # Single batch sparse inputs stored in `npz` files
       try:
         adj, features, labels, label_indices = load_npz(path)
       except Exception as e:
@@ -59,8 +60,18 @@ def fit_model(args: argparse.Namespace) -> None:
       feature_tensor = T.tensor(features.todense())\
                         .unsqueeze(0)\
                         .float()
+    elif os.path.isfile(path) and file_type == 'pkl':
+      # Batch inputs stored in pickle files
+      try:
+        adj, features, labels, label_indices = load_pkl(path)
+      except Exception as e:
+        raise e
+      feature_tensor = T.tensor(features).float()
+      adj_tensor = T.tensor(adj).float()
+      if len(adj_tensor.shape) == 2:
+        # Compensate batch dimension
+        adj_tensor = adj_tensor.repeat(feature_tensor.size(0), 1, 1)
     else:
-      # TODO (Juanwu): standardize dataset flow
       raise RuntimeError('Unsupported dataset')
 
     # Main procedure
@@ -95,7 +106,7 @@ def fit_model(args: argparse.Namespace) -> None:
       else:
         inputs = (feature_tensor, None)
       _, _, _, losses = model.forward(inputs)
-      loss: T.Tensor = T.FloatTensor([0], device=device)
+      loss = T.FloatTensor([0], device=device)
       for loss_val in losses.values():
         if loss_val is not None:
           loss += loss_val
@@ -111,20 +122,34 @@ def fit_model(args: argparse.Namespace) -> None:
 
     # Validation procedure
     model.eval()
-    pooled_features, preds, adj_pred, _ = model.forward((feature_tensor, adj_tensor))
-    pred_labels = preds[0].detach().cpu().numpy().argmax(axis=-1)
-    mod_score: float = modularity(adj, pred_labels)
-    cond_score: float = conductance(adj, pred_labels)
-    if labels is not None and label_indices is not None:
-      nmi_score = nmi(labels, pred_labels[label_indices])
-      prec = pairwise_precision(labels, pred_labels[label_indices])
-      recl = pairwise_recall(labels, pred_labels[label_indices])
-      f1_score = 2 * prec / (prec + recl)
-      _logger.info('Valid: Conductance %.4f Modularity %.4f NMI %.4f F1 %.4f',
-                    mod_score, cond_score, nmi_score, f1_score)
+    if args.graph_gt or not args.graph_learning:
+      pooled_features, preds, adj_pred, _ = model.forward((feature_tensor, adj_tensor))
     else:
-      _logger.info('Valid: Conductance %.4f Modularity %.4f',
-                    mod_score, cond_score)
+      # If graph learning, we use the graph we've learned
+      pooled_features, preds, adj_pred, _ = model.forward((feature_tensor, None))
+      adj = adj_pred[0].detach().cpu().numpy()
+
+    mod_score, cond_score = 0., 0.
+    nmi_score, f1_score = 0., 0.
+    for idx, pred_labels in enumerate(preds):
+      pred_labels = pred_labels.detach().cpu().numpy().argmax(axis=-1)
+      mod_score += modularity(adj, pred_labels)
+      cond_score += conductance(adj, pred_labels)
+
+      if labels is not None and label_indices is not None:
+        if len(labels.shape) > 1 and len(label_indices.shape) > 1:
+          label, label_indice = labels[idx], label_indices[idx]
+        else:
+          label, label_indice = labels, label_indices
+        pred_label = pred_labels[label_indice]
+        nmi_score += nmi(label, pred_label, average_method='arithmetic')
+        prec = pairwise_precision(label, pred_label)
+        recl = pairwise_recall(label, pred_label)
+        f1_score += 2 * prec * recl / (prec + recl)
+
+    _logger.info('Valid: Conductance %.4f Modularity %.4f NMI %.4f F1 %.4f',
+                  mod_score / len(preds), cond_score / len(preds),
+                  nmi_score / len(preds), f1_score / len(preds))
 
     # Dump checkpoints
     if not os.path.isdir(os.path.join(args.log_dir, 'log')):
@@ -184,7 +209,7 @@ if __name__ == '__main__':
                       help='Inflation factor')
   parser.add_argument('--log-dir', type=str, required=True,
                       help='Logging direction')
-  parser.add_argument('--lr', type=float, default=0.01,
+  parser.add_argument('--lr', type=float, default=0.001,
                       help='Learning rate')
   parser.add_argument('--lr-decay-gamma', type=float, default=1.,
                       help='Multiplicative factor for lr decay')
