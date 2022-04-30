@@ -15,6 +15,7 @@ import torch as T
 import torchinfo
 from sklearn.metrics import normalized_mutual_info_score as nmi
 from torch import optim
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
@@ -43,6 +44,10 @@ def fit_model(args: argparse.Namespace) -> None:
   T.manual_seed(args.seed)
   T.cuda.manual_seed(args.seed)
 
+  # SummaryWriter
+  writer = SummaryWriter(log_dir=os.path.join(args.log_dir, 'log/runs',
+                                              f'{time.time()}_exp'))
+
   with logging_redirect_tqdm():
     # Load dataset
     _logger.info('Loading dataset from %s', args.path)
@@ -56,18 +61,18 @@ def fit_model(args: argparse.Namespace) -> None:
         adj, features, labels, label_indices = load_npz(path)
       except Exception as e:
         raise e
-      adj_tensor = T.tensor(adj.todense()).unsqueeze(0).float()
-      feature_tensor = T.tensor(features.todense())\
-                        .unsqueeze(0)\
-                        .float()
+      adj_tensor = T.tensor(adj.todense()).unsqueeze(0)\
+                    .float().to(device)
+      feature_tensor = T.tensor(features.todense()).unsqueeze(0)\
+                        .float().to(device)
     elif os.path.isfile(path) and file_type == 'pkl':
       # Batch inputs stored in pickle files
       try:
         adj, features, labels, label_indices = load_pkl(path)
       except Exception as e:
         raise e
-      feature_tensor = T.tensor(features).float()
-      adj_tensor = T.tensor(adj).float()
+      feature_tensor = T.tensor(features).float().to(device)
+      adj_tensor = T.tensor(adj).float().to(device)
       if len(adj_tensor.shape) == 2:
         # Compensate batch dimension
         adj_tensor = adj_tensor.repeat(feature_tensor.size(0), 1, 1)
@@ -95,6 +100,8 @@ def fit_model(args: argparse.Namespace) -> None:
                                           step_size=args.lr_decay_steps,
                                           gamma=args.lr_decay_gamma)
 
+    global_train_step: int = 0
+    global_test_step: int = 0
     for epoch in tqdm(np.arange(args.epoch),
                       desc='Fit model',
                       position=0, leave=True):
@@ -114,48 +121,61 @@ def fit_model(args: argparse.Namespace) -> None:
       optimizer.step()
       scheduler.step()
 
+      # tracking
+      writer.add_scalar('Train/Total loss', loss.item(), global_train_step)
       msg: str = ''
       for name, val in losses.items():
         if val is not None:
           msg += f' {name}: {val.item():.4f}'
-      _logger.info('Train [%d/%d]:%s', epoch+1, args.epoch, msg)
+          writer.add_scalar(f'Train/{name:s}', val.item(), global_train_step)
+      _logger.info('Train [%d/%d]:%s', epoch + 1, args.epoch, msg)
+      global_train_step += 1
 
-    # Validation procedure
-    model.eval()
-    if args.graph_gt or not args.graph_learning:
-      pooled_features, preds, adj_pred, _ = model.forward((feature_tensor, adj_tensor))
-    else:
-      # If graph learning, we use the graph we've learned
-      pooled_features, preds, adj_pred, _ = model.forward((feature_tensor, None))
-      adj = adj_pred[0].detach().cpu().numpy()
+      # Validation procedure
+      model.eval()
+      if args.graph_gt or not args.graph_learning:
+        pooled_features, preds, adj_pred, _ = model.forward((feature_tensor, adj_tensor))
+      else:
+        # If graph learning, we use the graph we've learned
+        pooled_features, preds, adj_pred, _ = model.forward((feature_tensor, None))
+        adj = adj_pred[0].detach().cpu().numpy()
 
-    mod_score, cond_score = 0., 0.
-    nmi_score, f1_score = 0., 0.
-    for idx, pred_labels in enumerate(preds):
-      pred_labels = pred_labels.detach().cpu().numpy().argmax(axis=-1)
-      mod_score += modularity(adj, pred_labels)
-      cond_score += conductance(adj, pred_labels)
+      mod_score, cond_score = 0., 0.
+      nmi_score, f1_score = 0., 0.
+      for idx, pred_labels in enumerate(preds):
+        pred_labels = pred_labels.detach().cpu().numpy().argmax(axis=-1)
+        mod_score += modularity(adj, pred_labels)
+        cond_score += conductance(adj, pred_labels)
 
-      if labels is not None and label_indices is not None:
-        if len(labels.shape) > 1 and len(label_indices.shape) > 1:
-          label, label_indice = labels[idx], label_indices[idx]
-        else:
-          label, label_indice = labels, label_indices
-        pred_label = pred_labels[label_indice]
-        nmi_score += nmi(label, pred_label, average_method='arithmetic')
-        prec = pairwise_precision(label, pred_label)
-        recl = pairwise_recall(label, pred_label)
-        f1_score += 2 * prec * recl / (prec + recl)
+        if labels is not None and label_indices is not None:
+          if len(labels.shape) > 1 and len(label_indices.shape) > 1:
+            label, label_indice = labels[idx], label_indices[idx]
+          else:
+            label, label_indice = labels, label_indices
+          pred_label = pred_labels[label_indice]
+          nmi_score += nmi(label, pred_label, average_method='arithmetic')
+          prec = pairwise_precision(label, pred_label)
+          recl = pairwise_recall(label, pred_label)
+          f1_score += 2 * prec * recl / (prec + recl)
 
-    _logger.info('Valid: Conductance %.4f Modularity %.4f NMI %.4f F1 %.4f',
-                  mod_score / len(preds), cond_score / len(preds),
-                  nmi_score / len(preds), f1_score / len(preds))
+      writer.add_scalar('Valid/Modularity', mod_score / len(preds), global_test_step)
+      writer.add_scalar('Valid/Conductance', cond_score / len(preds), global_test_step)
+      writer.add_scalar('Valid/NMI', nmi_score / len(preds), global_test_step)
+      writer.add_scalar('Valid/F1', f1_score / len(preds), global_test_step)
+      global_test_step += 1
+
+      _logger.info('Valid [%d/%d]: Conductance %.4f Modularity %.4f NMI %.4f F1 %.4f',
+                    epoch + 1, args.epoch,
+                    cond_score / len(preds), mod_score / len(preds),
+                    nmi_score / len(preds), f1_score / len(preds))
 
     # Dump checkpoints
-    if not os.path.isdir(os.path.join(args.log_dir, 'log')):
-      os.makedirs(os.path.join(args.log_dir, 'log'))
     if not os.path.isdir(os.path.join(args.log_dir, 'checkpoints')):
       os.makedirs(os.path.join(args.log_dir, 'checkpoints'))
+    if not os.path.isdir(os.path.join(args.log_dir, 'log')):
+      os.makedirs(os.path.join(args.log_dir, 'log'))
+    if not os.path.isdir(os.path.join(args.log_dir, 'log/outputs')):
+      os.makedirs(os.path.join(args.log_dir, 'log/outputs'))
 
     # TODO (Juanwu): Load checkpoints
     ckpt_file = f'{time.time()}.single.{feature_tensor.size(-1):d}.pt'
@@ -165,7 +185,7 @@ def fit_model(args: argparse.Namespace) -> None:
       ckpt['optim_dict'] = optimizer.state_dict()
 
     pred_file = f'{time.time()}.{file_name:s}.{feature_tensor.size(-1)}.npz'
-    with open(os.path.join(args.log_dir, 'log', pred_file), 'wb') as f:
+    with open(os.path.join(args.log_dir, 'log/exp', pred_file), 'wb') as f:
       pred_info: Dict = OrderedDict()
       pred_info['pooled_features'] = pooled_features
       pred_info['assignments'] = pred_labels

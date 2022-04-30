@@ -133,4 +133,5 @@ dmypy.json
 /data
 /log
 /notebook
+/runs
 .vscode/
