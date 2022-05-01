@@ -100,6 +100,7 @@ def fit_model(args: argparse.Namespace) -> None:
                    n_clusters=args.n_clusters,
                    hidden=args.hidden, depths=args.depths,
                    dropout=args.dropout, inflation=args.inflation,
+                   activation=args.activation,
                    skip_conn=args.skip_conn,
                    graph_learning=args.graph_learning,
                    n_nodes=feature_tensor.size(-2),
