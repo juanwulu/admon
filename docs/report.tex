@@ -1,0 +1,277 @@
+% This template was created by Chris Hoofnagle for 
+% the Berkeley Center for Law & Technology. If you 
+% work for UCB, you are welcome to use it.
+
+
+\documentclass[letterpaper,12pt,twoside]{report}
+
+% This is a "report" document class, which means that it has chapters
+% and formatting like a book, but fundamentally is a design for
+% one-sided printing. There are many options to change the underlying
+% design---you can change the font, paper size, etc with these 
+% options below. Just put the options in the braces of 
+% \documentclass
+
+% Documentclass: Report Options: a4paper, a5paper, b5paper, letterpaper, legalpaper, landscape, 11pt, 12pt, twoside, twocolumn, notitlepage, openright, draft, fleqn, leqno, openbib
+
+%\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{graphicx}
+% \usepackage{lipsum} % generates lorem ipsum filler text
+\usepackage[most,many,skins,breakable]{tcolorbox}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{tikzpagenodes}
+\tcbuselibrary{skins,breakable,xparse}
+\usepackage{fancyhdr}
+\usepackage[default,scale=0.95]{opensans}
+\usepackage[hidelinks]{hyperref} % the hidelinks option prevents those terrible boxes from appearing in your print pdf
+% \usepackage[backend=biber,language=american,style=verbose]{biblatex}
+% \usepackage[citestyle=numeric, bibstyle=authortitle, sorting=anyt]{biblatex}
+% \addbibresource{bibliography.bib}
+\usepackage[natbibapa]{apacite}
+\usepackage{natbib}
+% \usepackage[numbers]{natbib}
+% \usepackage{cite}
+\usepackage[headheight=15pt,hmarginratio=1:1]{geometry}
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Berkeley Colors - Global (changing these will alter the whole
+% document)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Deep blue and gold
+\definecolor{berkeleyblue}{HTML}{003262}
+\definecolor{berkeleygold}{HTML}{FDB515}
+% Light blue and gold
+\definecolor{founderblue}{HTML}{3B7EA1}
+\definecolor{founderyellow}{HTML}{C4820E}
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Headings
+%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+\fancyhf{}
+% If you'd like, you can put the title of the report in the header
+% Just erase title of report if not
+
+\small\fancyhead[R] {\color{founderblue}Identify Airport Connections Based on Delay Patterns~ \thepage}
+% This adds the line below the header. You can make it thicker or thinner by editing the 0.4 value
+\renewcommand{\headrulewidth}{0.4pt}
+% This template only uses a header because a document with footnotes
+% looks strange with a footer. But if you want a footer, just 
+% uncomment the lines below
+%\small\fancyfoot[R] {\color{founderblue}Title of Report ~ \thepage}
+%\renewcommand{\footrulewidth}{0.0pt}
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Customizing Fonts & Title Formats - Global
+%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+% This section specifies the fonts and their sizes and 
+% colors for the headings. Notice that the package gives
+% you serif headings and san serif body text.
+
+\usepackage{titlesec}
+\usepackage{fontspec}
+
+% The headings are Berkeley's Old Style Fonts!
+% I don't like the new fonts, which are licensed from
+% Adobe --- why would you do that?
+
+\newfontfamily\headingfont{UCBerkeleyOS.otf}[
+BoldFont = UCBerkeleyOSBold.otf,
+ItalicFont = UCBerkeleyOSItalic.otf,
+BoldItalicFont = UCBerkeleyOSBoldItalic.otf]
+
+% This controls the chapter headings
+
+\titleformat{\chapter}{\fontsize{30}{60}\headingfont}{\color{founderblue}\thechapter\fontsize{90}{60}}{10pt}{\thispagestyle{empty}\color{founderblue}\Huge\bfseries}
+
+% This controls the section and subsection headings in the chapters
+% Notice that the headings in the chapter are numbered, e.g.
+% 1.1 A Lesson in Latin. If you don't want section numbering,
+% remove \thesection and/or \thesubsection
+
+\titleformat{\section}{\Large\headingfont}{}{0pt}{\color{founderblue}{\thesection} \ }[{\titlerule[0.8pt]}]
+
+\titleformat{\subsection}{\large\headingfont}{}{0pt}{\color{founderblue}{\thesubsection} \ }[{\titlerule[0.8pt]}]
+
+% This customizes the sections in the executive summary so that they
+% will not be numbered.
+
+\titleformat{name=\section,numberless}
+{\Large\headingfont}{}{-4pt}{\color{founderblue} \ }[{\titlerule[0.8pt]}]
+
+\titleformat{name=\subsection,numberless}
+{\large\headingfont}{}{-4pt}{\color{founderblue} \ }[{\titlerule[0.8pt]}]
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Sidebar Environment: mdframed
+%
+%%%%%%%%%%%%%%%%%%%%%%%
+
+% \usepackage{amstext}
+\usepackage{amsmath,amsfonts,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage[framemethod=TikZ]{mdframed}
+
+
+\mdfdefinestyle{custom}{frametitle={\colorbox{berkeleygold}{\space You must specify a title for your box \space}},
+     frametitlefont=\textbf,
+     backgroundcolor=founderblue!20,
+     linecolor=founderblue!70,
+     innertopmargin=10pt,
+     frametitleaboveskip=-\ht\strutbox,
+     skipabove=\topskip,
+     skipbelow=\topskip}
+
+
+
+
+%\newenvironment{sidebar}[1]
+% \mdfsetup{%
+% % Replace berkeleygold with white if you'd like
+%     frametitle={\colorbox{berkeleygold}{\space#1\space}},
+%     frametitlefont=\textbf,
+%     backgroundcolor=founderblue!20,
+%     linecolor=founderblue!70,
+%     innertopmargin=10pt,
+%     frametitleaboveskip=-\ht\strutbox,
+% %    frametitlealignment=\left,
+%     skipabove=\topskip,
+%     skipbelow=\topskip
+%     }%
+%   \begin{mdframed}%
+%   }
+%   {\end{mdframed}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Sidebars with tcolorbox -- Mybox
+%
+%%%%%%%%%%%%%%%%%%%%%%%
+
+\newtcolorbox{mybox}[2][]{enhanced, interior hidden, 
+coltitle=black, fonttitle=\bfseries\headingfont\large,
+attach boxed title to top left={yshift=-2.5mm},
+boxed title style={empty, size=small, top=1mm, bottom=2pt},
+%boxed title=0.5\linewidth,
+frame code={
+\path (title.east|-frame.north) coordinate (aux);
+\path[draw=founderblue, fill=founderblue!20, line width=0.5mm, rounded corners]
+(frame.west) |- ([xshift=-2.5mm]title.north east) to[out=0, in=180] ([xshift=7.5mm]aux)-|(frame.east)|-(frame.south)-|cycle;  
+},
+title={#2},#1}
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% General Guidance
+%
+%%%%%%%%%%%%%%%%%%%%%%%
+
+%\flushbottom
+
+%The \flushbottom declaration makes all text pages the same height, adding extra vertical space when necessary to fill out the page.
+
+%\onecolumn
+%The \onecolumn declaration starts a new page and produces single-column output.
+
+%\raggedbottom
+%The \raggedbottom declaration makes all pages the height of the text on that page. No extra vertical space is added.
+
+%\twocolumn
+%The \twocolumn declaration starts a new page and produces two-column output.
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Document Content Starts Here
+%
+%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\title{Understand Airport Operation Delays: A Graph Clustering Approach}
+
+\begin{document}
+
+% The title page appearance is controlled by a separate file named titlepage.tex
+\addcontentsline{toc}{chapter}{Abstract}
+\include{titlepage}
+
+% This makes the report have a white background
+\pagecolor{white}
+
+% Just comment out the next lines if you 
+% do not want a table of contents
+\include{abstract}
+
+% This adds the Executive Summary to the TOC w/o a number
+\tableofcontents
+% Note: to have a conclusion in the TOC without a number
+% the addcontentsline command appears after \include conclusion
+% below
+
+% The content of the report is in subfiles that are
+% imported below with the include command
+% You can create more "chapters" by copying the chapter.tex
+% files and using \include{chapterX} to include them in
+% the report
+\include{chapter1}
+\include{chapter2}
+\include{chapter3}
+\include{chapter4}
+%include{chapter5}
+\include{conclusion}
+% \include{appendix}
+% This adds the conclusion to the TOC without a number
+% \addcontentsline{toc}{chapter}{Conclusion}
+% It is possible to add a bibliography here
+% \printbibliography
+\bibliographystyle{apacite}
+% \bibliographystyle{plainnat}
+\bibliography{reference}
+\include{backcover}
+
+% This code creates decorative `colorboxes' for text
+% illustrations and the like. Just uncomment it and place
+% it in a chapter
+
+% \begin{tcolorbox}[breakable,title={An example colorbox},
+% colback=founderblue!5!white,
+% colframe=founderblue!75!black,
+% fonttitle=\headingfont\bfseries\large]
+% Your text goes here.
+% \tcbsubtitle[before skip=\baselineskip]%
+% {You can also have subboxes}
+% with extra content
+% \tcbsubtitle[before skip=\baselineskip]%
+% {Multiple rows}
+% If you like it.
+% \end{tcolorbox}
+
+
+% This code creates a decorative text box. 
+% Just uncomment it and place
+% it in a chapter
+
+% \begin{mybox}{Hello World!}
+
+% This is the mybox environment.
+
+% However, the problem with mybox is that they cannot break across pages :( So, they have to be pretty short. Otherwise use the colorbox
+
+% \end{mybox}
+
+
+
+
+
+\end{document}
+

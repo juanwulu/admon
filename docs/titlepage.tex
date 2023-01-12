@@ -1,0 +1,62 @@
+\begin{titlepage}
+\pagecolor{founderblue}
+       \vspace*{1cm}
+
+
+% This controls the title
+% You can reposition this element by editing the numeric
+% values in \node (1,1). The first value controls the 
+% horizontal placement, the second the vertical.
+
+\tikz[overlay, remember picture] \node at (1,1) {
+\begin{tcolorbox}[colback=berkeleygold,width=15cm,halign=right,boxrule=0pt]%%
+\headingfont{\fontsize{30}{60}\selectfont Identify Airport Connections \\ Based on Delay Patterns}
+
+\end{tcolorbox}
+};
+
+% This controls the subtitle
+\tikz[overlay, remember picture] \node at (1,-1.4) {
+\begin{tcolorbox}[colback=berkeleygold,width=15cm,halign=right,boxrule=0pt]%%
+\headingfont{\fontsize{25}{60}\selectfont A Data-driven Graph Clustering Approach}
+
+\end{tcolorbox}
+};
+
+
+
+   
+
+\vspace*{1cm}
+% This controls the author block. You can add or reduce the
+% number of authors by simply deleting text and the \\. Each
+% \\ gives you a new line
+\tikz[overlay, remember picture] \node at (-4,-8) {
+\begin{tcolorbox}[colback=berkeleygold,width=15cm,halign=right,boxrule=0pt]%%
+  \headingfont\Large Juanwu Lu \\ Ying Zhou 
+\end{tcolorbox}
+};
+  
+% This controls the date block. \today produces today's date.
+% You can erase \today and replace it with something else
+\tikz[overlay, remember picture] \node at (-4,-12) {
+\begin{tcolorbox}[colback=berkeleygold,width=15cm,halign=right,boxrule=0pt]%%
+  \headingfont\Large\today
+\end{tcolorbox}
+
+
+};
+    
+% This places the front cover logo. Replace logo.png with
+% your logo
+% You can reposition the logo by changing the node values
+% 6.5 places the image in the center. The second number
+% controls its vertical placement
+\tikz[overlay, remember picture] \node at (6.5,-15) {
+\includegraphics[width=0.7\textwidth]{logo.png}  
+
+
+};
+
+
+\end{titlepage}

@@ -1,0 +1,37 @@
+\chapter{RELATED WORKS}
+\pagestyle{fancy}
+
+Our work builds upon a rich collection of existing research on graph neural network, graph learning, and graph clustering methods.
+
+\section{Graph Neural Network}
+
+Data with graph structures are prevalent around us. A set of objects with connections among them can be depicted by a graph, such as chemical molecules and social network. To handle the tasks with graph data, emerging studies investigate and develop graph neural network (GNN) which allows end-to-end learning expressions and arbitrary structure of the graph data. Applications of these models can be seen in areas like antibacterial discovery \citep{stokes2020deep}, physics simulation \citep{sanchez2020learning}, fake news detection \citep{monti2019fake}, recommendation system \citep{eksombatchai2018pixie}, and traffic prediction \citep{lange2020traffic}. Readers can find interested and insightful in detailed survey \citep{sanchez2021gentle}.
+
+\section{Graph Learning}
+
+Graph learning is a semi-supervised learning method that aims to determine the optimal graph structure based on the "distance" of node features. Existing works demonstrate the power of graph learning. \citet{https://doi.org/10.48550/arxiv.1801.03226} learn an adaptive graph using distance metric learning for garph classification, which is task-driven during the model optimization. \citet{zhu2005semi} proposed a graph learning convolutional network, which learns a non-negative edge weight function that represents pairwise similarities within graph data for semi-supervised learning. \citet{li2019spatio} propose a spatio-temporal graph learning scheme for skeleton-based action recognition, which adaptively learns intrinsic high-order connectivities for skeleton joints. \citet{shi2019two} came up with a two-stream adaptive graph convolutional network for skeleton-based action recognition, where a shared graph for all instances and an individual graph for each instance are learned in an end-to-end pipeline. In our model, we learn based on the \emph{Graph Laplacian Regularizer}, which is proven more robust by the existing research \citep{shuman2013emerging}.
+
+\section{Graph Clustering}
+
+Graph clustering (or graph pooling) refers to the task of grouping the vertices in a graph into clusters taking into consideration the edge structure of the graph in such a way that there should be many edges \emph{within} each cluster and relatively few \emph{between} the clusters \citep{schaeffer2007graph}. Classical graph clustering algorithm such as the spectral clustering \citep{Luxburg07atutorial} relies on the eigenvalues of the laplacian matrix. To apply graph clustering with GNN, new methods emerges in recent decades. \citet{ying2018hierarchical} proposed DiffPool which includes a learnable pooling with link prediction loss to help encapsulate the clustering structure of a GNN and an additional entropy loss to penalize soft assignments. Other algorithms like Top-k \citep{pmlr-v97-gao19a} and SAG pooling \citep{pmlr-v97-lee19c} learn to sparsify the graph with learned weights. \citet{bianchi2020spectral} proposed MinCutPool which investigates differentiable formulation of spectral clustering as a pooling strategy.
+
+
+% \begin{mdframed}[style=custom,frametitle=\colorbox{berkeleygold}{\space Put your title here \space}]
+
+% You might like to use these boxes for essays or to break up text. Unlike the mybox environment, mdframed will break across pages.
+
+% Don't like the colors?
+
+% You can change them by editing the sidebar section of report.tex. In mdfdefinestyle, look for \textbackslash colorbox\{berkeleygold\} to alter the title background. If you want no color, just change berkeleygold to white. If you want to dilute the color a bit, you could add a !30 to the end of berkeleygold, as in berkeleygold!30
+
+% The background color is set by backgroundcolor and it is currently founderblue!20. You can deepen it by increasing the number or lighten it by reducing the number to 10 or even 5.
+
+% \end{mdframed}
+
+
+% \begin{mdframed}[style=custom,frametitle=\colorbox{berkeleygold}{\space This is my second box \space}]
+
+% Please note, you have to specify your title in each box in the frametitle option. Just put your title between the \textbackslash space commands.
+
+% \end{mdframed}
+

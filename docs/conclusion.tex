@@ -1,0 +1,18 @@
+\chapter{Conclusion}
+\pagestyle{fancy}
+
+In this project, we aim to identify the connections of airports in a network based on their similarities in operation delay patterns. To achieve this, we propose the Adaptive Deep Modularity Network building on existing studies. The model combines graph learning with graph clustering to learn graph structure and clustering labels simultaneously.
+
+Compared with similar graph clustering model with a predefined adjacency matrix, our model is able to learn valid connections through data-driven pipeline and achieve a high performance judging by conductance and modularity measure. Results show that our clustering method can identify both simultaneous and time-lagged patterns similarity between airports. 
+
+However, the limitations of our model are obvious. First, since the model is train on a data-driven pipeline, conductance and modularity performance metrics aren't intuitive for determining whether the clustering result is reasonable. Unlike some other clustering algorithms like tree-based models, our model doesn't integrate the importance measure with respect to each input feature, which can potentially be critical for interpretation. Last but not the least, since the optimization objective is complicated, training procedure can be highly sensitive to the initialization and easily converge to sub-optimal. We will address this issue in our future studies.
+
+% We're using chapter 4 as the conclusion. If you want to have more chapters, just create more files with chapter[number].tex. Make the last one the conclusion. In order to omit the chapter number, just place an asterix before the chapter name like so:
+
+% \textbackslash chapter*\{Conclusion\}
+
+\chapter*{Author Statements}
+
+The authors confirm contributions on the project as follows: \textbf{Juanwu Lu:} Conceptualization, Algorithm Design, Visualization, Writing-Reviewing and Editing. \textbf{Ying Zhou:} Conceptualization, Data Curation, Visualization, Analysis, Writing-Original draft preparation.
+
+Special thanks to \textbf{Anton Tsitsulin} from Google Research, NYC for his generous and insightful support on realization of the graph clustering model.

@@ -1,0 +1,8 @@
+\chapter*{ABSTRACT}
+\pagestyle{fancy}
+
+Flight delay is critical for air traffic operation management. Emerging sensing and machine learning techniques spawn promising delay identification and prediction methods. However, most of them ignore the airport network structure and use black-box end-to-end prediction pipelines that fail to reveal latent connections. This project proposes Adaptive Deep Modularity Network (ADMoN), a graph model capable of identifying and clustering airports based on their aggregated daily flight delay patterns. Individual airports use quarter-hour flight delays from the ASPM dataset to represent their local delay level. A fixed time window decomposes flight delays into departure and arrival delays associated with the origin and destination airports. The ADMoN model uses delay vectors as node features, extract airport connections, and assigns airports into clusters. Judging by the conductance and modularity of assignments, the results show that airports have a more significant cluster structure considering only departure delays than arrival delays. The extensive use case of our model is to identify daily connections. The identification results suggest strong relationships among operation days of the same week.
+
+\smallskip
+
+\noindent\textbf{Keywords:} Airport Delay, Traffic Management, Graph Neural Network, Clustering
