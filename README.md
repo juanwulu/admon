@@ -2,6 +2,9 @@
 
 [![license](https://img.shields.io/badge/license-BSD_3--Clause-gold.svg)](https://github.com/ChocolateDave/a2sos/blob/master/LICENSE)
 
+ADMON is short for Adaptive Deep Modularity Network, a data-driven graph
+model which is capable of simultaneously learning airport connections and clustering based on the delay patterns.
+
 ## Installation
 
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the dependencies locally.
